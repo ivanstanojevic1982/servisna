@@ -200,6 +200,8 @@ $('#sheet').addEventListener('click',e=>{
   else if(act==='copy')copyBk();
   else if(act==='imp')importBk(false);
   else if(act==='imp2')importBk(true);
+  else if(act==='fsave')fullBackup();
+  else if(act==='frestore')fullRestore();
 });
 const v=id=>$('#'+id).value.trim();
 
@@ -280,12 +282,31 @@ function editTires(){
 }
 function backup(){
   openSheet(`<h3>Rezervna kopija</h3>
-  <p style="color:var(--mut);font-size:14px">Podaci se čuvaju samo na ovom telefonu. Povremeno kopiraj rezervnu kopiju i nalepi je u Beleške. Istim tekstom vraćaš podatke na novom telefonu. Slike priloga servisa nisu u kopiji, one ostaju samo na ovom telefonu.</p>
-  <button class="btn" data-act="copy">Kopiraj rezervnu kopiju</button>
-  <textarea id="bk" readonly style="margin-top:10px;font-size:12px">${esc(JSON.stringify(db))}</textarea>
-  <label for="paste">Vrati podatke (nalepi kopiju)</label><textarea id="paste" style="font-size:12px"></textarea>
-  <button class="btn sec" data-act="imp">Učitaj kopiju</button>
+  <div><p style="color:var(--mut);font-size:14px;margin:0">Jedan fajl sa svim podacima, slikama auta i prilozima servisa. Sačuvaj ga u Files / iCloud Drive / Google Drive.</p>
+  <button class="btn" data-act="fsave">Sačuvaj kopiju u fajl</button>
+  <label class="attadd" for="fIn" style="margin-top:10px">Vrati iz fajla</label><input type="file" id="fIn" accept=".json,application/json,text/plain" hidden>
+  <div id="fMsg" style="font-size:13px;color:var(--mut);margin-top:6px"></div></div>
   <button class="btn sec" data-act="cancel">Zatvori</button>`);
+  $('#fIn').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+    try{const d=JSON.parse(await f.text());if(!d.data||!d.data.svc)throw 0;pendingFull=d;
+      $('#fMsg').innerHTML=`Fajl od ${esc(fmtD((d.made||'').slice(0,10)))}: ${d.data.svc.length} servisa, ${Object.keys(d.att||{}).length} priloga.<button class="btn del" data-act="frestore">Zameni sve podatke ovim fajlom</button>`}
+    catch(err){toast('Ovo nije ispravan fajl kopije')}};
+}
+let pendingFull=null;
+async function fullBackup(){
+  toast('Pripremam kopiju…');
+  const att={};for(const s of db.svc)for(const k of (s.att||[])){const d=await idb.get(k);if(d)att[k]=d}
+  const json=JSON.stringify({app:'c3aircross',made:new Date().toISOString(),data:db,att});
+  const name=`C3-Aircross-kopija-${today()}.json`;
+  const file=new File([json],name,{type:'application/json'});
+  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file]});return}}catch(e){if(e&&e.name==='AbortError')return}
+  try{const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=name;document.body.appendChild(a);a.click();a.remove();toast('Kopija preuzeta')}
+  catch(e){toast('Čuvanje fajla radi u instaliranoj aplikaciji')}
+}
+async function fullRestore(){
+  const d=pendingFull;if(!d)return;
+  for(const [k,v] of Object.entries(d.att||{})){try{await idb.put(k,v)}catch(e){return toast('Nema mesta za sve priloge')}}
+  db=d.data;save();galIdx=0;closeSheet();render();toast('Sve vraćeno')
 }
 function copyBk(){const t=JSON.stringify(db);const fb=()=>{const a=$('#bk');a.focus();a.select();toast('Tekst je označen, kopiraj ga')};
   try{navigator.clipboard.writeText(t).then(()=>toast('Kopirano')).catch(fb)}catch(e){fb()}}
