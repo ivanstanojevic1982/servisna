@@ -211,12 +211,12 @@ function render(){
   $('#kmTxt').textContent=db.kmDate?'km upisani '+fmtD(db.kmDate):'Servisna knjižica';
   $('#kmNum').textContent=k?fmtN(k)+' km':'Nije upisana';
   $('#plateTxt').hidden=!db.plate;$('#plateTxt').textContent=db.plate;
-  const reg=status(db.regDate),nx=status(db.next.date,db.next.km),ti=status(db.tires.next);
+  const reg=status(db.regDate),nx=status(db.next.date,db.next.km),tn=tireNext(),ti=status(tn.date);
   const row=(id,ic,t,v,[st,txt])=>`<button class="r" data-open="${id}"><span class="ic">${ic}</span><span class="m"><div class="t">${t}</div><div class="v">${v}</div></span><span class="pill ${st}">${txt}</span></button>`;
   $('#rem').innerHTML=
     row('reg','📄','Registracija',db.regDate?'ističe '+fmtD(db.regDate):'Dodirni da upišeš datum',reg)+
     row('next','🔧','Sledeći servis',[db.next.date&&fmtD(db.next.date),db.next.km&&'na '+fmtN(db.next.km)+' km'].filter(Boolean).join(' · ')||'Dodirni da upišeš',nx)+
-    row('tires','🛞','Gume',(db.tires.on?'Na autu: '+db.tires.on+tireInfo(db.tires.on):'Nije upisano')+(db.tires.next?' · zamena '+fmtD(db.tires.next):''),ti);
+    row('tires','🛞','Gume',(db.tires.on?'Na autu: '+db.tires.on+tireInfo(db.tires.on):'Nije upisano')+' · '+tn.to+' od '+fmtD(tn.date),ti);
   const list=[...db.svc].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const total=db.svc.reduce((a,s)=>a+price(s),0);
   $('#svc').innerHTML=list.length?list.map(s=>`<div class="s" data-svc="${s.id}"><div class="m"><div class="t">${esc(s.what||'Servis')}</div><div class="v">${fmtD(s.date)}${s.km?' · '+fmtN(s.km)+' km':''}${s.att&&s.att.length?' · 📎 '+s.att.length:''}</div>${s.note?`<div class="v" style="white-space:pre-line;margin-top:4px">${esc(s.note)}</div>`:''}</div>${price(s)?`<div class="p">${fmtN(price(s))} din</div>`:''}</div>`).join('')+`<div class="total"><span>Ukupno potrošeno</span><span>${fmtN(total)} din</span></div>`
@@ -339,12 +339,19 @@ function editNext(){
   <p style="color:var(--mut);font-size:13px">Upiši datum, kilometražu ili oba. Pre roka dobijaš oznaku „za X d“, a kad prođe, „kasni“.</p>${btns()}`);
   onSave=()=>{db.next={date:v('n_date'),km:v('n_km')};save();closeSheet();render();toast('Sačuvano')};
 }
+function tireNext(){
+  const t=today(),y=Number(t.slice(0,4)),nov=y+'-11-01',apr=y+'-04-01',on=db.tires.on;
+  const nextNov=t<=nov?nov:(y+1)+'-11-01',nextApr=t<=apr?apr:(y+1)+'-04-01';
+  if(on==='letnje')return{date:nextNov,to:'zimske'};
+  if(on==='zimske')return{date:nextApr,to:'letnje'};
+  return nextNov<nextApr?{date:nextNov,to:'zimske'}:{date:nextApr,to:'letnje'};
+}
 function tireInfo(k){const t=db.tires[k];if(!t)return'';const s=[t.brand,t.size].filter(Boolean).join(' ');return s?' ('+esc(s)+')':''}
 function showSet(k){document.querySelectorAll('.tset').forEach(d=>d.hidden=!!k&&d.dataset.set!==k)}
 function editTires(){
   openSheet(`<h3>Gume</h3><label>Trenutno na autu</label>
   <div class="seg"><button type="button" data-act="seg" data-val="letnje" class="${db.tires.on==='letnje'?'on':''}">☀️ Letnje</button><button type="button" data-act="seg" data-val="zimske" class="${db.tires.on==='zimske'?'on':''}">❄️ Zimske</button></div>
-  <label for="t_next">Sledeća zamena</label><input type="date" id="t_next" value="${esc(db.tires.next)}">
+  <p style="color:var(--mut);font-size:13px;margin:8px 2px 0">Zimske idu 1. novembra, letnje 1. aprila. Podsetnik se računa sam.</p>
   <div class="tset" data-set="letnje"><div class="th">☀️ Letnje gume</div>
   <label for="t_lb">Marka</label><input id="t_lb" value="${esc(db.tires.letnje?.brand)}" placeholder="npr. Michelin Primacy 4">
   <label for="t_ls">Dimenzija</label><input id="t_ls" value="${esc(db.tires.letnje?.size)}" placeholder="npr. 215/60 R16"></div>
@@ -353,7 +360,7 @@ function editTires(){
   <label for="t_zs">Dimenzija</label><input id="t_zs" value="${esc(db.tires.zimske?.size)}" placeholder="npr. 215/60 R16"></div>
   ${btns()}`);
   showSet(db.tires.on);
-  onSave=()=>{const on=document.querySelector('.seg .on');db.tires={on:on?on.dataset.val:'',next:v('t_next'),letnje:{brand:v('t_lb'),size:v('t_ls')},zimske:{brand:v('t_zb'),size:v('t_zs')}};save();closeSheet();render();toast('Sačuvano')};
+  onSave=()=>{const on=document.querySelector('.seg .on');db.tires={on:on?on.dataset.val:'',letnje:{brand:v('t_lb'),size:v('t_ls')},zimske:{brand:v('t_zb'),size:v('t_zs')}};save();closeSheet();render();toast('Sačuvano')};
 }
 function backup(){
   openSheet(`<h3>Rezervna kopija</h3>
