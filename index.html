@@ -82,6 +82,22 @@ input[type=date]::-webkit-date-and-time-value{text-align:left}
 .attadd{display:block;margin-top:8px;padding:12px;border:1px dashed var(--bd);border-radius:10px;text-align:center;color:var(--acc);font-weight:600;font-size:15px;cursor:pointer}
 .login{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:16px}
 .lbox{width:100%;max-width:380px;background:var(--card);border:1px solid var(--bd);border-radius:18px;padding:20px}
+.detail{position:fixed;inset:0;z-index:18;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch}
+.dbar{position:sticky;top:0;display:flex;justify-content:space-between;align-items:center;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;background:var(--bg);border-bottom:1px solid var(--bd);z-index:1}
+.dbtn{border:0;background:none;color:var(--tx);font-size:17px;padding:8px 4px;font-weight:600}
+.dbtn.acc{background:var(--acc);color:#fff;border-radius:20px;padding:8px 16px;font-size:15px}
+.dwrap{max-width:560px;margin:0 auto;padding:16px 16px calc(40px + env(safe-area-inset-bottom,0px))}
+.dhead{margin-bottom:16px}
+.dt{font-size:26px;font-weight:700;letter-spacing:-.3px;overflow-wrap:anywhere}
+.dm{color:var(--mut);font-size:16px;margin-top:4px}
+.dcard{background:var(--card);border:1px solid var(--bd);border-radius:14px;overflow:hidden}
+.dl{display:flex;justify-content:space-between;gap:12px;padding:13px 14px;border-top:1px solid var(--bd);font-size:17px}
+.dl:first-child{border-top:0}
+.dl span{min-width:0;overflow-wrap:anywhere}
+.dl b{white-space:nowrap;font-variant-numeric:tabular-nums}
+.dtot{display:flex;justify-content:space-between;margin-top:12px;padding:14px;border-radius:14px;background:var(--accs);font-size:19px;font-weight:700;font-variant-numeric:tabular-nums}
+.dsec{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--mut);margin:22px 4px 8px}
+.att.big{width:calc(50% - 4px);height:auto;aspect-ratio:3/4}
 .viewer{position:fixed;inset:0;background:#000;z-index:40;display:flex;align-items:center;justify-content:center}
 .viewer img{max-width:100%;max-height:100%;object-fit:contain}
 .vb{position:absolute;width:42px;height:42px;border-radius:50%;border:0;background:rgba(255,255,255,.18);color:#fff;font-size:24px;line-height:1;transform:translateY(-50%)}
@@ -129,6 +145,10 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
   <button class="link" id="lgForgot" type="button" style="display:block;margin:10px auto 0">Zaboravljena lozinka</button>
   <div id="lgErr" style="color:var(--bad);font-size:14px;margin-top:8px;text-align:center"></div>
 </form></div>
+<div class="detail" id="detail" hidden>
+  <div class="dbar"><button class="dbtn" id="dBack">‹ Nazad</button><button class="dbtn acc" id="dEdit">✎ Izmeni</button></div>
+  <div class="dwrap" id="dBody"></div>
+</div>
 <div class="viewer" id="viewer" hidden><img id="vImg" alt="Prilog"><button class="vb" id="vClose" style="top:calc(12px + env(safe-area-inset-top,0px));right:12px">✕</button><button class="vb" id="vPrev" style="left:12px;top:50%">‹</button><button class="vb" id="vNext" style="right:12px;top:50%">›</button><div id="vCnt"></div></div>
 <div class="ov" id="ov" hidden><div class="sheet" id="sheet"></div></div>
 
@@ -185,6 +205,7 @@ function status(date,km){
 }
 
 function render(){
+  if(detailId)drawDetail();
   renderGal();
   const k=curKm();
   $('#kmTxt').textContent=db.kmDate?'km upisani '+fmtD(db.kmDate):'Servisna knjižica';
@@ -262,6 +283,23 @@ function editSvc(id){
     if(id){const c=db.svc.find(x=>x.id===id);if(c)Object.assign(c,o);else db.svc.push({id,...o})}else db.svc.push({id:uid(),...o});if(Number(o.km)>curKm()){db.km=o.km;db.kmDate=o.date||today()}
     removed.forEach(k=>idb.del(k));cleanup=null;save();closeSheet();render();toast('Sačuvano')};
   onDel=()=>{(s.att||[]).concat(added).forEach(k=>idb.del(k));cleanup=null;db.svc=db.svc.filter(x=>x.id!==id);save();closeSheet();render();toast('Obrisano')};
+}
+let detailId=null;
+function showSvc(id){detailId=id;$('#detail').hidden=false;drawDetail();$('#detail').scrollTop=0}
+function closeDetail(){detailId=null;$('#detail').hidden=true}
+function drawDetail(){
+  const s=db.svc.find(x=>x.id===detailId);if(!s)return closeDetail();
+  const lines=String(s.note||'').split('\n').filter(l=>l.trim());
+  const rows=lines.map(l=>{const m=l.match(/^(.*?)[\s\-–:]*((?:\d{1,3}(?:[.\s]\d{3})+|\d+)(?:,\d{1,2})?)\s*(?:din\.?|rsd)?\s*$/i);
+    return m&&/[a-zčćšđž]/i.test(m[1])?`<div class="dl"><span>${esc(m[1].replace(/^\d+[.)]\s*/,''))}</span><b>${fmtN(Number(m[2].replace(/[.\s]/g,'').replace(',','.')))} din</b></div>`:`<div class="dl"><span>${esc(l)}</span></div>`}).join('');
+  const att=s.att||[];
+  $('#dBody').innerHTML=`<div class="dhead"><div class="dt">${esc(s.what||'Servis')}</div>
+    <div class="dm">${[fmtD(s.date),s.km?fmtN(s.km)+' km':''].filter(Boolean).join(' · ')}</div></div>
+    ${rows?`<div class="dcard">${rows}</div>`:''}
+    <div class="dtot"><span>Ukupno</span><span>${fmtN(price(s))||0} din</span></div>
+    ${att.length?`<div class="dsec">Prilozi</div><div class="atts" id="dAtts">${att.map(a=>`<div class="att big" data-a="${a}"><img alt="Prilog"></div>`).join('')}</div>`:''}`;
+  att.forEach(async a=>{const d=await idb.get(a);const im=document.querySelector(`#dAtts [data-a="${a}"] img`);if(im&&d)im.src=d});
+  const box=$('#dAtts');if(box)box.onclick=e=>{const t=e.target.closest('[data-a]');if(t)viewAtt(att,att.indexOf(t.dataset.a))};
 }
 function viewAtt(list,i){
   const v=$('#viewer');v.hidden=false;let k=i;
@@ -348,8 +386,10 @@ function importBk(ok){
 }
 
 $('#rem').addEventListener('click',e=>{const b=e.target.closest('[data-open]');if(!b)return;({reg:editReg,next:editNext,tires:editTires})[b.dataset.open]()});
-$('#svc').addEventListener('click',e=>{const s=e.target.closest('[data-svc]');if(s)editSvc(s.dataset.svc)});
+$('#svc').addEventListener('click',e=>{const s=e.target.closest('[data-svc]');if(s)showSvc(s.dataset.svc)});
 $('#addSvc').onclick=()=>editSvc();
+$('#dBack').onclick=closeDetail;
+$('#dEdit').onclick=()=>editSvc(detailId);
 $('#kmBtn').onclick=editKm;
 $('#gal').addEventListener('scroll',()=>{const g=$('#gal'),i=Math.round(g.scrollLeft/g.clientWidth);if(i!==galIdx){galIdx=i;delArm=false;$('#phMenu').hidden=true;$('#delPh').textContent='🗑 Obriši ovu sliku';document.querySelectorAll('#dots i').forEach((d,k)=>d.classList.toggle('on',k===i))}},{passive:true});
 $('#moreBtn').onclick=e=>{e.stopPropagation();const m=$('#phMenu');m.hidden=!m.hidden;delArm=false;$('#delPh').textContent='🗑 Obriši ovu sliku'};
