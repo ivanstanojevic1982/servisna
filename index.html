@@ -80,6 +80,8 @@ input[type=date]::-webkit-date-and-time-value{text-align:left}
 .att .x{position:absolute;top:3px;right:3px;min-width:24px;height:24px;border-radius:12px;border:0;background:rgba(0,0,0,.65);color:#fff;font-size:15px;line-height:1;padding:0 6px}
 .att .x.arm{background:var(--bad);font-size:11px}
 .attadd{display:block;margin-top:8px;padding:12px;border:1px dashed var(--bd);border-radius:10px;text-align:center;color:var(--acc);font-weight:600;font-size:15px;cursor:pointer}
+.login{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:16px}
+.lbox{width:100%;max-width:380px;background:var(--card);border:1px solid var(--bd);border-radius:18px;padding:20px}
 .viewer{position:fixed;inset:0;background:#000;z-index:40;display:flex;align-items:center;justify-content:center}
 .viewer img{max-width:100%;max-height:100%;object-fit:contain}
 .vb{position:absolute;width:42px;height:42px;border-radius:50%;border:0;background:rgba(255,255,255,.18);color:#fff;font-size:24px;line-height:1;transform:translateY(-50%)}
@@ -115,12 +117,28 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
   <h2><span>Servisi</span><button class="add" id="addSvc">＋ Dodaj</button></h2>
   <div class="list" id="svc"></div>
 
-  <div class="foot"><button class="link" id="bkBtn">Rezervna kopija podataka</button></div>
+  <div class="foot"><button class="link" id="bkBtn">Rezervna kopija podataka</button><div style="color:var(--mut);font-size:12px;margin-top:4px"><span id="who"></span> · <button class="link" id="outBtn" style="padding:4px">Odjavi se</button></div></div>
 </div>
+<div class="login" id="boot"><div class="lbox"><p style="text-align:center;color:var(--mut)">Učitavam…</p></div></div>
+<div class="login" id="login" hidden><form class="lbox" id="loginForm">
+  <h2 style="margin:0 0 4px;font-size:22px;color:var(--tx);text-transform:none;letter-spacing:0;display:block">C3 Aircross</h2>
+  <p style="color:var(--mut);margin:0 0 6px;font-size:14px">Prijavi se da vidiš svoju servisnu knjižicu.</p>
+  <label for="lgMail">Mejl</label><input id="lgMail" type="email" autocomplete="username" inputmode="email" required>
+  <label for="lgPass">Lozinka</label><input id="lgPass" type="password" autocomplete="current-password" required>
+  <button class="btn" id="lgBtn" type="submit">Prijavi se</button>
+  <button class="link" id="lgForgot" type="button" style="display:block;margin:10px auto 0">Zaboravljena lozinka</button>
+  <div id="lgErr" style="color:var(--bad);font-size:14px;margin-top:8px;text-align:center"></div>
+</form></div>
 <div class="viewer" id="viewer" hidden><img id="vImg" alt="Prilog"><button class="vb" id="vClose" style="top:calc(12px + env(safe-area-inset-top,0px));right:12px">✕</button><button class="vb" id="vPrev" style="left:12px;top:50%">‹</button><button class="vb" id="vNext" style="right:12px;top:50%">›</button><div id="vCnt"></div></div>
 <div class="ov" id="ov" hidden><div class="sheet" id="sheet"></div></div>
 
-<script>
+<script type="module">
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut,sendPasswordResetEmail} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import {initializeFirestore,getFirestore,persistentLocalCache,persistentSingleTabManager,doc,setDoc,getDoc,deleteDoc,onSnapshot} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+const fbApp=initializeApp({apiKey:"AIzaSyDwdRVgY3xsMtn3Vd3Xqo_gt8rdk0UHr9k",authDomain:"servisna-knjizica-be160.firebaseapp.com",projectId:"servisna-knjizica-be160",storageBucket:"servisna-knjizica-be160.firebasestorage.app",messagingSenderId:"966005060931",appId:"1:966005060931:web:e8adbf424ba964acb36bf6"});
+const auth=getAuth(fbApp);
+let fs;try{fs=initializeFirestore(fbApp,{localCache:persistentLocalCache({tabManager:persistentSingleTabManager()})})}catch(e){fs=getFirestore(fbApp)}
 const KEY='c3aircross_v1';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -131,27 +149,29 @@ const today=()=>new Date().toISOString().slice(0,10);
 const days=d=>Math.round((new Date(d)-new Date(today()))/864e5);
 
 function blank(){return{plate:'',regDate:'',next:{date:'',km:''},tires:{on:'',next:''},svc:[]}}
-let db=(()=>{try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.svc)return d}catch(e){}return blank()})();
-if(!db.seed1){db.seed1=1;if(!db.svc.some(s=>s.id==='seed1'))db.svc.push({id:'seed1',what:'Menjač i viljuške',date:'2026-10-02',km:'',price:'29850',
-  note:'Ulje za menjač 2.100\nLeva viljuška 7.000\nDesna viljuška 7.000\nSemering menjača 650\nNosač 3.100\nRad (ruke) 10.000'});try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}}
-if(!db.photos){db.photos=db.photo?[db.photo]:['default'];delete db.photo;try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}}
-const idb=(()=>{let p;const op=()=>p||(p=new Promise((res,rej)=>{const r=indexedDB.open('c3prilozi',1);r.onupgradeneeded=()=>r.result.createObjectStore('img');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}));
-  const tx=(m,f)=>op().then(d=>new Promise((res,rej)=>{const t=d.transaction('img',m),q=f(t.objectStore('img'));t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error)}));
-  return{get:k=>tx('readonly',s=>s.get(k)).catch(()=>null),put:(k,v)=>tx('readwrite',s=>s.put(v,k)),del:k=>tx('readwrite',s=>s.delete(k)).catch(()=>{})}})();
+let db=norm({});let user=null,mainRef=null,unsub=null,loaded=false;const imgCache=new Map();
+function norm(d){d=d||{};const b=blank();for(const k of Object.keys(b))if(d[k]==null)d[k]=b[k];if(!d.next)d.next={date:'',km:''};if(!d.tires)d.tires={on:'',next:''};if(!Array.isArray(d.photos))d.photos=['default'];return d}
+const iref=k=>doc(fs,'users',user.uid,'img',k);
+const idb={
+  get:async k=>{if(imgCache.has(k))return imgCache.get(k);if(!user)return null;try{const s=await getDoc(iref(k));const d=s.exists()?s.data().d:null;if(d)imgCache.set(k,d);return d}catch(e){return null}},
+  put:async(k,v)=>{if(!v||v.length>1000000)throw new Error('big');imgCache.set(k,v);setDoc(iref(k),{d:v}).catch(()=>toast('Slika nije sačuvana u bazi'))},
+  del:async k=>{imgCache.delete(k);if(user)deleteDoc(iref(k)).catch(()=>{})}
+};
 function shrink(f,max,q){return new Promise(res=>{const url=URL.createObjectURL(f),im=new Image();
   im.onload=()=>{const r=Math.min(1,max/Math.max(im.naturalWidth,im.naturalHeight)),W=Math.round(im.naturalWidth*r),H=Math.round(im.naturalHeight*r);
-    const c=document.createElement('canvas');c.width=W;c.height=H;c.getContext('2d').drawImage(im,0,0,W,H);URL.revokeObjectURL(url);res(c.toDataURL('image/jpeg',q))};
+    const c=document.createElement('canvas');c.width=W;c.height=H;c.getContext('2d').drawImage(im,0,0,W,H);URL.revokeObjectURL(url);let d=c.toDataURL('image/jpeg',q),qq=q;while(d.length>900000&&qq>0.3){qq-=0.12;d=c.toDataURL('image/jpeg',qq)}res(d)};
   im.onerror=()=>{URL.revokeObjectURL(url);res(null)};im.src=url})}
 let galIdx=0,delArm=false;
 function renderGal(){
   if(!Array.isArray(db.photos))db.photos=['default'];
   const ph=db.photos.length?db.photos:['default'],def=$('#defImg').src;
-  $('#gal').innerHTML=ph.map((s,i)=>`<img alt="Slika ${i+1}" src="${s==='default'?def:s}">`).join('');
+  $('#gal').innerHTML=ph.map((s,i)=>`<img alt="Slika ${i+1}" data-k="${s}" src="${s==='default'?def:(imgCache.get(s)||'')}">`).join('');
+  ph.forEach(async s=>{if(s==='default'||imgCache.has(s))return;const d=await idb.get(s);const im=document.querySelector(`#gal img[data-k="${s}"]`);if(im&&d)im.src=d});
   $('#dots').innerHTML=ph.length>1?ph.map((_,i)=>`<i class="${i===galIdx?'on':''}"></i>`).join(''):'';
   $('#delPh').hidden=!db.photos.length;delArm=false;$('#delPh').textContent='🗑 Obriši ovu sliku';
   const g=$('#gal');galIdx=Math.min(galIdx,ph.length-1);g.scrollLeft=galIdx*g.clientWidth;
 }
-function save(){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}}
+function save(){if(!mainRef)return;setDoc(mainRef,JSON.parse(JSON.stringify(db))).catch(e=>toast('Nije sačuvano u bazi ('+(e.code||'greška')+')'))}
 const curKm=()=>db.km?Number(db.km):Math.max(0,...db.svc.map(s=>Number(s.km)||0));
 
 function status(date,km){
@@ -234,7 +254,7 @@ function editSvc(id){
   cleanup=()=>added.forEach(k=>idb.del(k));
   onSave=()=>{const o={what:v('s_what'),date:v('s_date'),km:v('s_km'),price:v('s_price'),note:v('s_note'),att};
     if(!o.what&&!o.price)return toast('Upiši šta je urađeno');
-    if(id)Object.assign(s,o);else db.svc.push({id:uid(),...o});if(Number(o.km)>curKm()){db.km=o.km;db.kmDate=o.date||today()}
+    if(id){const c=db.svc.find(x=>x.id===id);if(c)Object.assign(c,o);else db.svc.push({id,...o})}else db.svc.push({id:uid(),...o});if(Number(o.km)>curKm()){db.km=o.km;db.kmDate=o.date||today()}
     removed.forEach(k=>idb.del(k));cleanup=null;save();closeSheet();render();toast('Sačuvano')};
   onDel=()=>{(s.att||[]).concat(added).forEach(k=>idb.del(k));cleanup=null;db.svc=db.svc.filter(x=>x.id!==id);save();closeSheet();render();toast('Obrisano')};
 }
@@ -295,7 +315,7 @@ function backup(){
 let pendingFull=null;
 async function fullBackup(){
   toast('Pripremam kopiju…');
-  const att={};for(const s of db.svc)for(const k of (s.att||[])){const d=await idb.get(k);if(d)att[k]=d}
+  const att={};for(const k of db.svc.flatMap(s=>s.att||[]).concat(db.photos.filter(p=>p!=='default'))){const d=await idb.get(k);if(d)att[k]=d}
   const json=JSON.stringify({app:'c3aircross',made:new Date().toISOString(),data:db,att});
   const name=`C3-Aircross-kopija-${today()}.json`;
   const file=new File([json],name,{type:'application/json'});
@@ -304,9 +324,14 @@ async function fullBackup(){
   catch(e){toast('Čuvanje fajla radi u instaliranoj aplikaciji')}
 }
 async function fullRestore(){
-  const d=pendingFull;if(!d)return;
-  for(const [k,v] of Object.entries(d.att||{})){try{await idb.put(k,v)}catch(e){return toast('Nema mesta za sve priloge')}}
-  db=d.data;save();galIdx=0;closeSheet();render();toast('Sve vraćeno')
+  const d=pendingFull;if(!d)return;closeSheet();toast('Prebacujem podatke…');
+  await importAll(JSON.parse(JSON.stringify(d.data)),d.att||{});toast('Sve vraćeno')
+}
+async function importAll(data,att){
+  data=norm(data);
+  data.photos=await Promise.all(data.photos.map(async p=>{if(typeof p==='string'&&p.startsWith('data:')){const k='p'+uid();await idb.put(k,p);return k}return p}));
+  for(const [k,v] of Object.entries(att)){try{await idb.put(k,v)}catch(e){}}
+  delete data.seed1;delete data.photo;db=data;galIdx=0;save();render();
 }
 function copyBk(){const t=JSON.stringify(db);const fb=()=>{const a=$('#bk');a.focus();a.select();toast('Tekst je označen, kopiraj ga')};
   try{navigator.clipboard.writeText(t).then(()=>toast('Kopirano')).catch(fb)}catch(e){fb()}}
@@ -327,7 +352,7 @@ $('#addPh').addEventListener('click',()=>{setTimeout(()=>$('#phMenu').hidden=tru
 document.addEventListener('click',e=>{if(!e.target.closest('.phbar'))$('#phMenu').hidden=true});
 $('#delPh').onclick=e=>{e.stopPropagation();
   if(!delArm){delArm=true;$('#delPh').textContent='Dodirni opet za brisanje';return}
-  $('#phMenu').hidden=true;db.photos.splice(galIdx,1);galIdx=Math.max(0,galIdx-1);save();renderGal();toast('Slika obrisana');
+  $('#phMenu').hidden=true;const gone=db.photos.splice(galIdx,1)[0];if(gone&&gone!=='default')idb.del(gone);galIdx=Math.max(0,galIdx-1);save();renderGal();toast('Slika obrisana');
 };
 function loadImg(f){return new Promise(res=>{const url=URL.createObjectURL(f),im=new Image();
   im.onload=()=>{const W=Math.min(900,im.naturalWidth),H=Math.round(im.naturalHeight*W/im.naturalWidth);
@@ -336,12 +361,40 @@ function loadImg(f){return new Promise(res=>{const url=URL.createObjectURL(f),im
 $('#photoIn').addEventListener('change',async e=>{
   const files=[...e.target.files];e.target.value='';if(!files.length)return;
   let added=0,full=false;
-  for(const f of files){const d=await loadImg(f);if(!d)continue;db.photos.push(d);
-    try{localStorage.setItem(KEY,JSON.stringify(db));added++}catch(err){db.photos.pop();full=true;break}}
+  for(const f of files){const d=await loadImg(f);if(!d)continue;const k='p'+uid();try{await idb.put(k,d)}catch(err){full=true;continue}db.photos.push(k);added++}
+  save();
   galIdx=db.photos.length-1;renderGal();
-  toast(full?`Dodato ${added}, nema više mesta za slike`:added===1?'Slika dodata':`Dodato slika: ${added}`);
+  toast(full?`Dodato ${added}, neke slike su prevelike`:added===1?'Slika dodata':`Dodato slika: ${added}`);
 });
 $('#bkBtn').onclick=backup;
+$('#outBtn').onclick=()=>{if($('#outBtn').dataset.arm){signOut(auth)}else{$('#outBtn').dataset.arm=1;$('#outBtn').textContent='Dodirni opet za odjavu'}};
+$('#loginForm').addEventListener('submit',async e=>{e.preventDefault();const b=$('#lgBtn');b.disabled=true;b.textContent='Prijavljujem…';$('#lgErr').textContent='';
+  try{await signInWithEmailAndPassword(auth,$('#lgMail').value.trim(),$('#lgPass').value)}
+  catch(err){$('#lgErr').textContent=({'auth/invalid-credential':'Pogrešan mejl ili lozinka.','auth/wrong-password':'Pogrešna lozinka.','auth/user-not-found':'Ne postoji nalog sa tim mejlom.','auth/too-many-requests':'Previše pokušaja, sačekaj malo.','auth/network-request-failed':'Nema interneta. Za prvu prijavu treba internet.'})[err.code]||('Prijava nije uspela ('+err.code+')')}
+  b.disabled=false;b.textContent='Prijavi se'});
+$('#lgForgot').onclick=async()=>{const m=$('#lgMail').value.trim();if(!m)return $('#lgErr').textContent='Prvo upiši mejl, pa dodirni ponovo.';
+  try{await sendPasswordResetEmail(auth,m);$('#lgErr').textContent='Poslat je mejl za novu lozinku.'}catch(e){$('#lgErr').textContent='Slanje nije uspelo ('+e.code+')'}};
+function oldIdbGet(k){return new Promise(res=>{try{const r=indexedDB.open('c3prilozi',1);r.onupgradeneeded=()=>r.result.createObjectStore('img');
+  r.onsuccess=()=>{try{const t=r.result.transaction('img','readonly').objectStore('img').get(k);t.onsuccess=()=>res(t.result||null);t.onerror=()=>res(null)}catch(e){res(null)}};r.onerror=()=>res(null)}catch(e){res(null)}})}
+function offerLocal(){let loc=null;try{loc=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+  if(!loc||!loc.svc||localStorage.getItem(KEY+'_moved'))return;
+  openSheet(`<h3>Prebaci podatke u bazu?</h3><p style="color:var(--mut);font-size:14px">Na ovom telefonu postoje podaci iz ranije verzije: ${loc.svc.length} servisa. Prebaci ih u bazu, sa slikama i prilozima.</p>
+  <button class="btn" data-act="move">Prebaci sada</button><button class="btn sec" data-act="cancel">Ne sada</button>`);
+  pendingLocal=loc}
+let pendingLocal=null;
+$('#sheet').addEventListener('click',async e=>{if(!e.target.closest('[data-act="move"]')||!pendingLocal)return;closeSheet();toast('Prebacujem…');
+  const att={};for(const k of pendingLocal.svc.flatMap(s=>s.att||[])){const d=await oldIdbGet(k);if(d)att[k]=d}
+  await importAll(pendingLocal,att);try{localStorage.setItem(KEY+'_moved','1')}catch(e){}pendingLocal=null;toast('Podaci su u bazi')});
+onAuthStateChanged(auth,u=>{
+  user=u;if(unsub){unsub();unsub=null}imgCache.clear();
+  $('#login').hidden=!!u;$('#boot').hidden=true;
+  if(!u){mainRef=null;db=norm({});loaded=false;return}
+  $('#who').textContent=u.email||'';$('#outBtn').textContent='Odjavi se';delete $('#outBtn').dataset.arm;
+  mainRef=doc(fs,'users',u.uid,'data','main');
+  unsub=onSnapshot(mainRef,s=>{db=norm(s.exists()?s.data():{});const first=!loaded;loaded=true;render();
+      if(first&&!s.exists())offerLocal()},
+    err=>toast('Baza nije dostupna ('+err.code+')'));
+});
 render();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
