@@ -224,9 +224,21 @@ function render(){
 }
 
 /* ---- sheet ---- */
-function openSheet(h){$('#sheet').innerHTML=h;$('#ov').hidden=false;$('#sheet').scrollTop=0}
+/* slojevi + Android dugme Nazad */
+const layers=[];let closeDetailAfter=false;
+function pushLayer(n){layers.push(n);try{history.pushState({l:layers.length},'')}catch(e){}}
+function hideLayer(n){
+  if(n==='sheet'){$('#ov').hidden=true;if(cleanup){cleanup();cleanup=null}}
+  else if(n==='detail'){detailId=null;$('#detail').hidden=true}
+  else if(n==='viewer'){$('#viewer').hidden=true;$('#vImg').src=''}}
+function backLayer(n){
+  if(layers[layers.length-1]===n)history.back();
+  else{const i=layers.lastIndexOf(n);if(i>=0)layers.splice(i,1);hideLayer(n)}}
+window.addEventListener('popstate',()=>{const n=layers.pop();if(n)hideLayer(n);
+  if(closeDetailAfter&&layers[layers.length-1]==='detail'){closeDetailAfter=false;history.back()}});
+function openSheet(h){$('#sheet').innerHTML=h;if($('#ov').hidden){$('#ov').hidden=false;pushLayer('sheet')}$('#sheet').scrollTop=0}
 let cleanup=null;
-function closeSheet(){$('#ov').hidden=true;if(cleanup){cleanup();cleanup=null}}
+function closeSheet(){if(!$('#ov').hidden)backLayer('sheet')}
 $('#ov').addEventListener('click',e=>{if(e.target.id==='ov')closeSheet()});
 function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),1600)}
 const btns=(del)=>`<button class="btn" data-act="save">Sačuvaj</button>${del?'<button class="btn del" data-act="del">Obriši</button>':''}<button class="btn sec" data-act="cancel">Otkaži</button>`;
@@ -285,10 +297,10 @@ function editSvc(id){
   onDel=()=>{(s.att||[]).concat(added).forEach(k=>idb.del(k));cleanup=null;db.svc=db.svc.filter(x=>x.id!==id);save();closeSheet();render();toast('Obrisano')};
 }
 let detailId=null;
-function showSvc(id){detailId=id;$('#detail').hidden=false;drawDetail();$('#detail').scrollTop=0}
-function closeDetail(){detailId=null;$('#detail').hidden=true}
+function showSvc(id){detailId=id;if($('#detail').hidden){$('#detail').hidden=false;pushLayer('detail')}drawDetail();$('#detail').scrollTop=0}
+function closeDetail(){if(!$('#detail').hidden)backLayer('detail')}
 function drawDetail(){
-  const s=db.svc.find(x=>x.id===detailId);if(!s)return closeDetail();
+  const s=db.svc.find(x=>x.id===detailId);if(!s){if(layers[layers.length-1]==='detail')closeDetail();else{closeDetailAfter=true;$('#detail').hidden=true}return}
   const lines=String(s.note||'').split('\n').filter(l=>l.trim());
   const rows=lines.map(l=>{const m=l.match(/^(.*?)[\s\-–:]*((?:\d{1,3}(?:[.\s]\d{3})+|\d+)(?:,\d{1,2})?)\s*(?:din\.?|rsd)?\s*$/i);
     return m&&/[a-zčćšđž]/i.test(m[1])?`<div class="dl"><span>${esc(m[1].replace(/^\d+[.)]\s*/,''))}</span><b>${fmtN(Number(m[2].replace(/[.\s]/g,'').replace(',','.')))} din</b></div>`:`<div class="dl"><span>${esc(l)}</span></div>`}).join('');
@@ -302,11 +314,11 @@ function drawDetail(){
   const box=$('#dAtts');if(box)box.onclick=e=>{const t=e.target.closest('[data-a]');if(t)viewAtt(att,att.indexOf(t.dataset.a))};
 }
 function viewAtt(list,i){
-  const v=$('#viewer');v.hidden=false;let k=i;
+  const v=$('#viewer');if(v.hidden){v.hidden=false;pushLayer('viewer')}let k=i;
   const show=async()=>{$('#vImg').src=(await idb.get(list[k]))||'';$('#vCnt').textContent=list.length>1?`${k+1} / ${list.length}`:'';
     $('#vPrev').hidden=k<=0;$('#vNext').hidden=k>=list.length-1};
   $('#vPrev').onclick=()=>{k--;show()};$('#vNext').onclick=()=>{k++;show()};
-  $('#vClose').onclick=()=>{v.hidden=true;$('#vImg').src=''};show();
+  $('#vClose').onclick=()=>backLayer('viewer');show();
 }
 function editKm(){
   openSheet(`<h3>Trenutna kilometraža</h3>
